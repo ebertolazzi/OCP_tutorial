@@ -267,8 +267,12 @@ classdef (Abstract) OCP_NLP < handle
       jmap = [ 1:self.nx, totx-self.nx+(1:self.nx), idp ] ;
       Jac(imap,jmap) = ones(self.nbc,2*self.nx+self.np)  ;
     end
-    
-    % -------
+
+    %  _   _ _   _ _
+    % | | | | |_(_) |___
+    % | |_| |  _| | (_-<
+    %  \___/ \__|_|_/__/
+    %
     function H = FD_ds_hessian( self, tL, tR, XL, XR, UC, PARS, L )
       N = 2*self.nx+self.nu+self.np ;
 
@@ -301,7 +305,64 @@ classdef (Abstract) OCP_NLP < handle
         % assign as column i of Hessian
         H(:,i) = d2f;
       end
-      % H = tril(H) ;      
+      H = 0.5*(H+H.');      
+    end
+
+    %     _
+    %  _ | |_  _ _ __  _ __
+    % | || | || | '  \| '_ \
+    %  \__/ \_,_|_|_|_| .__/
+    %                 |_|
+    %
+    function ODE = jump_standard( ~, tL, tR, XL, XR, UC )
+      ODE = XR - XL ;
+    end
+
+    %
+    function JAC = jump_standard_jacobian( ~, tL, tR, XL, XR, UC )
+      JAC = [ -eye(self.nx,self.nx), ...
+               eye(self.nx,self.nx), ...
+               zeros(self.nx, self.nu+self.np) ] ;
+    end
+
+    %
+    function H = jump_standard_hessian( ~, tL, tR, XL, XR, UC, L )
+      dim = 2*self.nx+self.nu+self.np ;
+      H   = zeros(dim,dim) ;
+    end
+
+    %        _    _           _     _
+    %  _ __ (_)__| |_ __  ___(_)_ _| |_
+    % | '  \| / _` | '_ \/ _ \ | ' \  _|
+    % |_|_|_|_\__,_| .__/\___/_|_||_\__|
+    %              |_|
+    %     
+    function C = midpoint_ds( self, tL, tR, XL, XR, UC, PARS, RHS )
+      tM = (tR+tL)/2 ;
+      XM = (XR+XL)./2 ;
+      C  = (XR-XL)/(tR-tL) - feval( RHS, tM, XM, UC, PARS ) ;
+    end
+ 
+    function CJ = midpoint_ds_jacobian( self, tL, tR, XL, XR, UC, PARS, JAC )
+      tM = (tR+tL)/2 ;
+      XM = (XR+XL)./2 ;
+      JJ = feval( JAC, tM, XM, UC, PARS ) ;
+      B1 = (-0.5)*JJ(1:self.nx,1:self.nx) ;
+      B2 = JJ(1:self.nx,self.nx+1:end) ;
+      bf = 1/(tR - tL) ;
+      CJ = [ B1-bf*eye(self.nx), B1+bf*eye(self.nx), -B2 ] ;
+    end
+
+    function CH = midpoint_ds_hessian( self, tL, tR, XL, XR, UC, PARS, L, HESS )
+      tM = (tR+tL)/2 ;
+      XM = (XR+XL)./2 ;
+      HH = feval( HESS, tM, XM, UC, PARS, L ) ;
+      D1 = (-0.25)*HH(1:self.nx,1:self.nx) ;
+      R1 = (-0.5)*HH(1:self.nx,self.nx+1:end) ;
+      D2 = -HH(self.nx+1:end,self.nx+1:end) ;
+      CH = [ D1,   D1,   R1 ; ...
+             D1,   D1,   R1 ; ...
+             R1.', R1.', D2 ] ;
     end
   end
 end

@@ -27,7 +27,5 @@ train = OCP_train() ;
 train.setup( nodes ) ;
 
 info = train.solve() ;
-
 train.plot() ;
-
 info 

@@ -27,6 +27,29 @@ classdef OCP_BangBang < OCP_NLP
     sol
   end
 
+  methods (Hidden = true)
+    %   ___  ___  ___
+    %  / _ \|   \| __|
+    % | (_) | |) | _|
+    %  \___/|___/|___|
+    %
+    function RES = RHS( self, t, X, U, T )
+      RES = [ T*X(2) ; T*U ] ;
+    end
+    %
+    function RES = JAC( self, t, X, U, T )
+      RES = [ 0, T, 0, X(2) ; ...
+              0, 0, T, U  ] ;
+    end
+    %
+    function RES = HESS( self, t, X, U, T, L )
+      RES = [ 0, 0,    0,    0    ; ...
+              0, 0,    0,    L(1) ; ...
+              0, 0,    0,    L(2) ; ...
+              0, L(1), L(2), 0 ] ;
+    end
+  end
+
   methods
 
     function self = OCP_BangBang( )
@@ -71,10 +94,10 @@ classdef OCP_BangBang < OCP_NLP
       funcs.jacobian          = @(Z) self.NLP_constraints_jacobian(Z);
       funcs.jacobianstructure = @() self.NLP_constraints_jacobian_pattern();
 
-      if false
+      if true
         %options.ipopt.derivative_test = 'second-order';
         funcs.hessian           = @( Z, sigma, lambda ) self.NLP_hessian( Z, sigma, lambda ) ;
-        funcs.hessianstructure  = @()  self.NLP_hessian_pattern();
+        funcs.hessianstructure  = @() self.NLP_hessian_pattern();
       else
         %options.ipopt.derivative_test            = 'first-order';
         options.ipopt.hessian_approximation      = 'limited-memory';
@@ -173,56 +196,17 @@ classdef OCP_BangBang < OCP_NLP
     %  \___/|___/|___/_/ |___/_/ \_\___|
     %
     function C = ds( self, tL, tR, XL, XR, UC, T )
-      xL = XL(1) ; vL = XL(2) ;
-      xR = XR(1) ; vR = XR(2) ;
-      u  = UC(1) ;
-      % ----------
-      DT = tR - tL ;
-      xM = (xR+xL)/2 ;
-      vM = (vR+vL)/2 ;
-      % ----------
-      C    = zeros(2,1) ;
-      C(1) = (xR - xL)/DT - T*vM ;
-      C(2) = (vR - vL)/DT - T*u ;
+      C = self.midpoint_ds( tL, tR, XL, XR, UC, T, @self.RHS ) ;
     end
 
     %
-    function JAC = ds_jacobian( self, tL, tR, XL, XR, UC, T )
-      xL = XL(1) ; vL = XL(2) ;
-      xR = XR(1) ; vR = XR(2) ;
-      u  = UC(1) ;
-      % ----------
-      DT = tR - tL ;
-      xM = (xR+xL)/2 ;
-      vM = (vR+vL)/2 ;
-      % ----------
-      JAC = [ -1/DT, -0.5*T,  1/DT, -0.5*T,  0, -vM ; ... 
-                  0,  -1/DT,     0,   1/DT, -T, -u ] ;
+    function CJ = ds_jacobian( self, tL, tR, XL, XR, UC, T )
+      CJ = self.midpoint_ds_jacobian( tL, tR, XL, XR, UC, T, @self.JAC ) ;
     end
 
     %
     function H = ds_hessian( self, tL, tR, XL, XR, UC, T, L )
-      xL = XL(1) ; vL = XL(2) ;
-      xR = XR(1) ; vR = XR(2) ;
-      u  = UC(1) ;
-      % ----------
-      DT = tR - tL ;
-      xM = (xR+xL)/2 ;
-      vM = (vR+vL)/2 ;
-      % ----------
-      H1 = [ 0,    0, 0,    0, 0,    0 ; ...
-             0,    0, 0,    0, 0, -0.5 ; ...
-             0,    0, 0,    0, 0,    0 ; ...
-             0,    0, 0,    0, 0, -0.5 ; ...
-             0,    0, 0,    0, 0,    0 ; ...
-             0, -0.5, 0, -0.5, 0,    0 ] ;
-      H2 = [ 0, 0, 0, 0,  0,  0 ; ...
-             0, 0, 0, 0,  0,  0 ; ...
-             0, 0, 0, 0,  0,  0 ; ...
-             0, 0, 0, 0,  0,  0 ; ...
-             0, 0, 0, 0,  0, -1 ; ...
-             0, 0, 0, 0, -1,  0 ] ;
-      H = L(1) * H1 + L(2) * H2 ;
+      H = self.midpoint_ds_hessian( tL, tR, XL, XR, UC, T, L, @self.HESS ) ;
     end
 
     %     _
@@ -231,21 +215,18 @@ classdef OCP_BangBang < OCP_NLP
     %  \__/ \_,_|_|_|_| .__/
     %                 |_|
     %
-    function ODE = jump( ~, tL, tR, XL, XR, UC )
-      ODE = XR - XL ;
+    function ODE = jump( self, tL, tR, XL, XR, UC )
+      ODE = self.jump_standard(tL, tR, XL, XR, UC );
     end
 
     %
     function JAC = jump_jacobian( ~, tL, tR, XL, XR, UC )
-      JAC = [ -eye(self.nx,self.nx), ...
-               eye(self.nx,self.nx), ...
-               zeros(self.nx, self.nu+self.np) ] ;
+      JAC = self.jump_jacobian_standard( tL, tR, XL, XR, UC );
     end
 
     %
     function H = jump_hessian( ~, tL, tR, XL, XR, UC, L )
-      dim = 2*self.nx+self.nu+self.np ;
-      H   = zeros(dim,dim) ;
+      H = self.jump_hessian_standard( tL, tR, XL, XR, UC, L );
     end
 
     %  ___  ___
