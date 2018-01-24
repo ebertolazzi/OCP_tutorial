@@ -104,12 +104,16 @@ classdef OCP_BangBang < OCP_NLP
 
       subplot( 3, 1, 1 );  
       plot( nodes, x );
+      title('x') ;
 
       subplot( 3, 1, 2 );  
       plot( nodes, v );
+      title('v') ;
 
       subplot( 3, 1, 3 );  
       plot( nodes(1:end-1), u );
+      title('u') ;
+
     end
 
     %                      __              _   _

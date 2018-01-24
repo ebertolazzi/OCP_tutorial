@@ -128,12 +128,16 @@ classdef OCP_train < OCP_NLP
 
       subplot( 3, 1, 1 );  
       plot( nodes, x ) ;
+      title('x') ;
 
       subplot( 3, 1, 2 );  
       plot( nodes, v ) ;
+      title('v') ;
 
       subplot( 3, 1, 3 );  
       plot( nodes(1:end-1), ua, nodes(1:end-1), ub ) ;
+      title('ua,ub') ;
+
     end
 
     %                      __              _   _

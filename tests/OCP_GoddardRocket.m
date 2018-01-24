@@ -71,7 +71,7 @@ classdef OCP_GoddardRocket < OCP_NLP
       nbc = self.nbc;
  
       LZ = reshape([ self.h_i; 0; self.m_f ] * ones(1,N), 1, 3*N ) ;
-      UZ = reshape([ Inf;    Inf; self.m_i ] * ones(1,N), 1, 3*N ) ;
+      UZ = reshape([ Inf;      10; self.m_i ] * ones(1,N), 1, 3*N ) ;
 
       options.lb = [ LZ, zeros(1,N-1), 0.0001 ] ;  % Lower bound on the variables.
       options.ub = [ UZ, self.Tmax*ones(1,N-1), Inf ] ;  % Upper bound on the variables.
