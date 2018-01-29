@@ -184,7 +184,7 @@ classdef OCP_train < OCP_NLP
       xL = XL(1) ; vL = XL(2) ;
       xR = XR(1) ; vR = XR(2) ;
       v  = (vL+vR)/2 ;
-      L  = ua * v ;
+      L  = (tR-tL) * ua * v ;
     end
 
     %
@@ -193,7 +193,7 @@ classdef OCP_train < OCP_NLP
       xL = XL(1) ; vL = XL(2) ;
       xR = XR(1) ; vR = XR(2) ;
       v  = (vL+vR)/2 ;
-      gradL = [ 0, ua/2, 0, ua/2,  v, 0] ;
+      gradL = (tR-tL) * [ 0, ua/2, 0, ua/2,  v, 0] ;
     end
     
     %
@@ -202,12 +202,12 @@ classdef OCP_train < OCP_NLP
       xL = XL(1) ; vL = XL(2) ;
       xR = XR(1) ; vR = XR(2) ;
       v  = (vL+vR)/2 ;
-      hessL = [ 0,   0,   0,   0, 0,   0 ; ...
-                0,   0,   0,   0, 0.5, 0 ; ...
-                0,   0,   0,   0, 0,   0 ; ...
-                0,   0,   0,   0, 0.5, 0 ; ...
-                0, 0.5,   0, 0.5, 0,   0 ; ...
-                0,   0,   0,   0, 0,   0 ] ;
+      hessL = (tR-tL) * [ 0,   0,   0,   0, 0,   0 ; ...
+                          0,   0,   0,   0, 0.5, 0 ; ...
+                          0,   0,   0,   0, 0,   0 ; ...
+                          0,   0,   0,   0, 0.5, 0 ; ...
+                          0, 0.5,   0, 0.5, 0,   0 ; ...
+                          0,   0,   0,   0, 0,   0 ] ;
     end
 
     %  __  __

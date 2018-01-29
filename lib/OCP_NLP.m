@@ -21,11 +21,11 @@ classdef (Abstract) OCP_NLP < handle
 
   properties (SetAccess = protected, Hidden = true)
     nodes
-    N
-    nx
-    nu
-    np
-    nbc
+    N      % total number of nodes
+    nx     % number of states
+    nu     % number of controls
+    np     % number of parameters
+    nbc    % number of boundary conditions
   end
 
   methods (Abstract)
@@ -79,15 +79,20 @@ classdef (Abstract) OCP_NLP < handle
 
       totx = self.N*self.nx ;
       totu = (self.N-1)*self.nu ;
-      X = mat2cell( Z(1:totx), self.nx*ones(1,self.N), 1 ) ;
-      U = mat2cell( Z(totx+1:totx+totu), self.nu*ones(1,self.N-1), 1 ) ;      
-      P = Z(totx+totu+1:end) ;
 
-      res = self.mayer( self.nodes(1), self.nodes(end), X{1}, X{end}, P ) ;
+      idx  = 1:self.nx ;
+      idx1 = (totx-self.nx)+(1:self.nx) ;
+      idp  = (totx+totu)+(1:self.np) ;
+
+      res = self.mayer( self.nodes(1), self.nodes(end), Z(idx), Z(idx1), Z(idp) ) ;
+      idu = totx+(1:self.nu) ;
       for k=1:self.N-1
-        nk  = self.nodes(k) ;
-        nk1 = self.nodes(k+1) ;
-        res = res + (nk1-nk) * self.lagrange( nk, nk1, X{k}, X{k+1}, U{k}, P ) ;
+        nk   = self.nodes(k) ;
+        nk1  = self.nodes(k+1) ;
+        idx1 = idx + self.nx ; 
+        res  = res + self.lagrange( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
+        idu  = idu + self.nu ;
+        idx  = idx1 ;
       end
       % variation for controls
       % for k=2:N-1
@@ -100,28 +105,22 @@ classdef (Abstract) OCP_NLP < handle
 
       totx = self.N*self.nx ;
       totu = (self.N-1)*self.nu ;
-      X = mat2cell( Z(1:totx), self.nx*ones(1,self.N), 1 ) ;
-      U = mat2cell( Z(totx+1:totx+totu), self.nu*ones(1,self.N-1), 1 ) ;      
-      P = Z(totx+totu+1:end) ;
-
-      gx = mat2cell( zeros( 1, self.nx*self.N ),     1, self.nx*ones(1,self.N) ) ;
-      gu = mat2cell( zeros( 1, self.nu*(self.N-1) ), 1, self.nu*ones(1,self.N-1) ) ;
-      gp = zeros( 1, self.np ) ;
-
-      gg      = self.mayer_gradient( self.nodes(1), self.nodes(end), X{1}, X{end}, P ) ;
-      ggg     = mat2cell( gg, 1, [ self.nx, self.nx, self.np ] ) ;
-      gx{1}   = ggg{1} ;
-      gx{end} = ggg{2} ;
-      gp      = ggg{3} ;
+      
+      idx  = 1:self.nx ;
+      idx1 = (totx-self.nx)+(1:self.nx) ;
+      idp  = (totx+totu)+(1:self.np) ;
+      
+      g = zeros( 1, totx + totu + self.np ) ;
+      g([idx,idx1,idp]) = self.mayer_gradient( self.nodes(1), self.nodes(end), Z(idx), Z(idx1), Z(idp) ) ;
+      idu = totx+(1:self.nu) ;
       for k=1:self.N-1
-        nk      = self.nodes(k) ;
-        nk1     = self.nodes(k+1) ;
-        gg      = (nk1-nk) * self.lagrange_gradient( nk, nk1, X{k}, X{k+1}, U{k}, P ) ;
-        ggg     = mat2cell( gg, 1, [ self.nx, self.nx, self.nu, self.np ] ) ;
-        gx{k}   = gx{k}   + ggg{1} ;
-        gx{k+1} = gx{k+1} + ggg{2} ;
-        gu{k}   = ggg{3} ;
-        gp      = gp + ggg{4} ;
+        nk    = self.nodes(k) ;
+        nk1   = self.nodes(k+1) ;
+        idx1  = idx + self.nx ;
+        id    = [ idx, idx1, idu, idp ] ;
+        g(id) = g(id) + self.lagrange_gradient( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
+        idx   = idx1 ;
+        idu   = idu + self.nu ;
       end
       % variation for controls
       % for k=2:N-1
@@ -129,7 +128,7 @@ classdef (Abstract) OCP_NLP < handle
       %   gu{k}   = gu{k}   + tmp ; 
       %   gu{k-1} = gu{k-1} - tmp ;
       % end
-      g = [ cell2mat(gx), cell2mat(gu), gp ] ;
+      %g = [ cell2mat(gx), cell2mat(gu), gp ] ;
     end
 
     %  _  _           _
@@ -141,28 +140,29 @@ classdef (Abstract) OCP_NLP < handle
 
       totx = self.N*self.nx ;
       totu = (self.N-1)*self.nu ;
-      X = mat2cell( Z(1:totx), self.nx*ones(1,self.N), 1 ) ;
-      U = mat2cell( Z(totx+1:totx+totu), self.nu*ones(1,self.N-1), 1 ) ;      
-      P = Z(totx+totu+1:end) ;
-      L = mat2cell( lambda, [self.nx*ones(1,self.N-1),self.nbc], 1 ) ;
-      H = sparse( totx+totu, totx+totu ) ;
+      H    = sparse( totx+totu, totx+totu ) ;
 
-      imap = [1:self.nx, (totx-self.nx)+(1:self.nx), (totx+totu)+(1:self.np) ] ;
+      idx  = 1:self.nx ;
+      idx1 = (totx-self.nx)+(1:self.nx) ;
+      idp  = (totx+totu)+(1:self.np) ;
+      idl  = (self.nx*(self.N-1))+(1:self.nbc);
+
+      imap = [ idx, idx1, idp ] ;
       n1   = self.nodes(1) ;
       ne   = self.nodes(end) ;
-      H(imap,imap) = sigma * self.mayer_hessian( n1, ne, X{1}, X{end}, P ) + ...
-                     self.bc_hessian( n1, ne, X{1}, X{end}, P, L{end} ) ;
-      idp = (totx+totu)+(1:self.np) ;
+      H(imap,imap) = sigma * self.mayer_hessian( n1, ne, Z(idx), Z(idx1), Z(idp) ) + ...
+                     self.bc_hessian( n1, ne, Z(idx), Z(idx1), Z(idp), lambda(idl) ) ;
+      idu = totx+(1:self.nu) ;
       for k=1:self.N-1
         nk   = self.nodes(k) ;
         nk1  = self.nodes(k+1) ;
-        tmp  = sigma * (nk1-nk) ;
-        idx  = (k-1)*self.nx ;
-        idu  = (k-1)*self.nu + totx ;
-        imap = [ idx+(1:2*self.nx), idu+(1:self.nu), idp ] ;
+        idx1 = idx + self.nx ;
+        imap = [ idx, idx1, idu, idp ] ;
         H(imap,imap) = H(imap,imap) + ...
-                       tmp * self.lagrange_hessian( nk, nk1, X{k}, X{k+1}, U{k}, P ) + ...
-                       self.ds_hessian( nk, nk1, X{k}, X{k+1}, U{k}, P, L{k} ) ;
+                       sigma * self.lagrange_hessian( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) + ...
+                       self.ds_hessian( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp), lambda(idx) ) ;
+        idx = idx1 ;
+        idu = idu + self.nu ;
       end
       %% variation for controls
       %for k=2:N-1
@@ -201,22 +201,27 @@ classdef (Abstract) OCP_NLP < handle
     % | (__/ _ \ ' \(_-<  _| '_/ _` | | ' \  _(_-<
     %  \___\___/_||_/__/\__|_| \__,_|_|_||_\__/__/
     %
-    function c = NLP_constraints( self, Z )
+    function C = NLP_constraints( self, Z )
 
       totx = self.N*self.nx ;
       totu = (self.N-1)*self.nu ;
-      X = mat2cell( Z(1:totx), self.nx*ones(1,self.N), 1 ) ;
-      U = mat2cell( Z(totx+1:totx+totu), self.nu*ones(1,self.N-1), 1 ) ;      
-      P = Z(totx+totu+1:end) ;
-      C = mat2cell( zeros( (self.N-1)*self.nx, 1 ), self.nx*ones(1,self.N-1), 1 ) ;
+      idx  = 1:self.nx ;
+      idu  = totx+(1:self.nu) ;
+      idp  = (totx+totu)+(1:self.np) ;
+
+      C = zeros( (self.N-1)*self.nx + self.nbc, 1 ) ;
 
       for k=1:self.N-1
-        nk   = self.nodes(k) ;
-        nk1  = self.nodes(k+1) ;
-        C{k} = self.ds( nk, nk1, X{k}, X{k+1}, U{k}, P ) ;
+        nk     = self.nodes(k) ;
+        nk1    = self.nodes(k+1) ;
+        idx1   = idx + self.nx ;
+        C(idx) = self.ds( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
+        idx    = idx1 ;
+        idu    = idu + self.nu ;
       end
-      bc = self.bc( self.nodes(1), self.nodes(end), X{1}, X{end}, P ) ;
-      c  = [ cell2mat( C ) ; bc ] ;
+      idx   = 1:self.nx ;
+      id    = ((self.N-1)*self.nx)+(1:self.nbc) ;
+      C(id) = self.bc( self.nodes(1), self.nodes(end), Z(idx), Z(idx1), Z(idp) ) ;
     end
 
     % -------
@@ -224,26 +229,26 @@ classdef (Abstract) OCP_NLP < handle
 
       totx = self.N*self.nx ;
       totu = (self.N-1)*self.nu ;
-      X = mat2cell( Z(1:totx), self.nx*ones(1,self.N), 1 ) ;
-      U = mat2cell( Z(totx+1:totx+totu), self.nu*ones(1,self.N-1), 1 ) ;      
-      P = Z(totx+totu+1:end) ;
-  
-      dim = (self.N-1)*self.nx+self.nbc ;
-      Jac = sparse( dim, totx+totu+self.np ) ;
-      idp = totx + totu + (1:self.np) ;
+      idx  = 1:self.nx ;
+      idu  = totx+(1:self.nu) ;
+      idp  = (totx+totu)+(1:self.np) ;
+
+      dim  = (self.N-1)*self.nx+self.nbc ;
+      Jac  = sparse( dim, totx+totu+self.np ) ;
+
       for k=1:self.N-1
         nk   = self.nodes(k) ;
         nk1  = self.nodes(k+1) ;
-        J    = self.ds_jacobian( nk, nk1, X{k}, X{k+1}, U{k}, P ) ;
-        idx  = (k-1)*self.nx ;
-        idu  = (k-1)*self.nu + totx ;
-        imap = idx + (1:self.nx) ;
-        jmap = [ idx + (1:2*self.nx), idu + (1:self.nu), idp ] ;
-        Jac(imap,jmap) = J ;
+        idx1 = idx + self.nx ;
+        J    = self.ds_jacobian( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
+        Jac( idx, [ idx, idx1, idu, idp ] ) = J ;
+        idu = idu + self.nu ;
+        idx = idx1 ;
       end
-      J = self.bc_jacobian( self.nodes(1), self.nodes(end), X{1}, X{end}, P ) ;
+      idx = 1:self.nx ;
+      J = self.bc_jacobian( self.nodes(1), self.nodes(end), Z(idx), Z(idx1), Z(idp) ) ;
       imap = [ totx - self.nx + (1:self.nbc) ] ;
-      jmap = [ 1:self.nx, totx-self.nx+(1:self.nx), idp ] ;
+      jmap = [ idx, idx1, idp ] ;
       Jac(imap,jmap) = Jac(imap,jmap) + J ;
     end
 
