@@ -34,6 +34,8 @@ classdef OCP_train < OCP_NLP
     uaMax
     ubMax
     sol
+    epsia % TV epsi ctrl a
+    epsib % TV epsi ctrl b
   end
 
   methods
@@ -57,6 +59,8 @@ classdef OCP_train < OCP_NLP
       self.zz      = [ 2, 4 ];
       self.uaMax   = 10 ;
       self.ubMax   = 2 ;    
+      self.epsia   = 1e-8 ;
+      self.epsib   = 0 ;    
     end 
 
     function info = solve( self )
@@ -337,5 +341,36 @@ classdef OCP_train < OCP_NLP
       Hess = zeros(4,4) ;
     end
 
+
+    %  _______     __                  _             _
+    % |_   _\ \   / /   ___ ___  _ __ | |_ _ __ ___ | |___
+    %   | |  \ \ / /   / __/ _ \| '_ \| __| '__/ _ \| / __|
+    %   | |   \ V /   | (_| (_) | | | | |_| | | (_) | \__ \
+    %   |_|    \_/     \___\___/|_| |_|\__|_|  \___/|_|___/
+    %
+    function tvU = TVU( self, tL, tC, tR, UCL, UCR )
+      epsi1 = self.epsia/(tR-tL) ;
+      epsi2 = self.epsib/(tR-tL) ;
+      tvU   = epsi1 * (UCR(1)-UCL(1))^2 + epsi2 * (UCR(2)-UCL(2))^2 ;
+    end
+
+    function tvG = TVU_gradient( self, tL, tC, tR, UCL, UCR )
+      epsi1 = self.epsia*(UCR(1)-UCL(1))/(tR-tL) ;
+      epsi2 = self.epsib*(UCR(2)-UCL(2))/(tR-tL) ;
+      tvG   = epsi1 * [ -2, 0, 2, 0 ] + epsi2 * [ 0, -2, 0, 2 ] ;
+    end
+ 
+    function tvH = TVU_hessian( self, tL, tC, tR, UCL, UCR )
+      epsi1 = self.epsia/(tR-tL) ;
+      epsi2 = self.epsib/(tR-tL) ;
+      tvH   = epsi1 * [  2, 0, -2, 0 ; ...
+                         0, 0,  0, 0 ; ...
+                        -2, 0,  2, 0 ; ...
+                         0, 0,  0, 0 ] + ...
+              epsi2 * [ 0,  0, 0,  0 ; ...
+                        0,  2, 0, -2 ; ...
+                        0,  0, 0,  0 ; ...
+                        0, -2, 0,  2 ];
+    end
   end
 end

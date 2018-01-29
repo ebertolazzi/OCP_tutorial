@@ -53,6 +53,11 @@ classdef (Abstract) OCP_NLP < handle
     bcf = bc( self, tL, tR, XL, XR, PARS )
     bcJ = bc_jacobian( self, tL, tR, XL, XR, PARS )
     bcH = bc_hessian( self, tL, tR, XL, XR, PARS, L )
+
+    % tvU
+    tvU = TVU( self, tL, tC, tR, UCL, UCR )
+    tvG = TVU_gradient( self, tL, tC, tR, UCL, UCR )
+    tvH = TVU_hessian( self, tL, tC, tR, UCL, UCR )
   end
 
   methods
@@ -95,9 +100,15 @@ classdef (Abstract) OCP_NLP < handle
         idx  = idx1 ;
       end
       % variation for controls
-      % for k=2:N-1
-      %   res = res + (nodes(k+1)-nodes(k-1)) * data.pars.uepsi * sum( (U{k}-U{k-1}).^2 ) ;
-      % end
+      idu = totx+(1:self.nu) ;
+      for k=2:self.N-1
+        nk0  = self.nodes(k-1) ;
+        nk1  = self.nodes(k)   ;
+        nk2  = self.nodes(k+1) ;
+        idu1 = idu+self.nu ;
+        res  = res + self.TVU( nk0, nk1, nk2, Z(idu), Z(idu1) ) ;
+        idu  = idu1 ;
+      end
     end
 
     %
@@ -123,11 +134,16 @@ classdef (Abstract) OCP_NLP < handle
         idu   = idu + self.nu ;
       end
       % variation for controls
-      % for k=2:N-1
-      %   tmp     = 2 * (nodes(k+1)-nodes(k-1)) * data.pars.uepsi * (U{k}-U{k-1}).' ;
-      %   gu{k}   = gu{k}   + tmp ; 
-      %   gu{k-1} = gu{k-1} - tmp ;
-      % end
+      idu = totx+(1:self.nu) ;
+      for k=2:self.N-1
+        nk0   = self.nodes(k-1) ;
+        nk1   = self.nodes(k)   ;
+        nk2   = self.nodes(k+1) ;
+        idu1  = idu+self.nu ;
+        id    = [ idu, idu1 ] ;
+        g(id) = g(id) + self.TVU_gradient( nk0, nk1, nk2, Z(idu), Z(idu1) ) ;
+        idu   = idu1 ;
+      end
       %g = [ cell2mat(gx), cell2mat(gu), gp ] ;
     end
 
@@ -164,12 +180,17 @@ classdef (Abstract) OCP_NLP < handle
         idx = idx1 ;
         idu = idu + self.nu ;
       end
-      %% variation for controls
-      %for k=2:N-1
-      %  imap = [ totx+(k-2)*nu+(1:2*nu) ] ;
-      %  tmp  = 2 * sigma * (nodes(k+1)-nodes(k-1)) * data.pars.uepsi ;
-      %  H(imap,imap) = H(imap,imap) + tmp * [ eye(nu), -eye(nu) ; -eye(nu), eye(nu) ] ;
-      %end
+      % variation for controls
+      idu = totx+(1:self.nu) ;
+      for k=2:self.N-1
+        nk0   = self.nodes(k-1) ;
+        nk1   = self.nodes(k)   ;
+        nk2   = self.nodes(k+1) ;
+        idu1  = idu+self.nu ;
+        id    = [ idu, idu1 ] ;
+        H(id,id) = H(id,id) + sigma * self.TVU_hessian( nk0, nk1, nk2, Z(idu), Z(idu1) ) ;
+        idu   = idu1 ;
+      end
       H = tril(H) ;
     end
 
@@ -189,10 +210,13 @@ classdef (Abstract) OCP_NLP < handle
         H(imap,imap) = ones( dim, dim ) ;
       end
       % variation for controls
-      %for k=2:self.N-1
-      %  imap = [ totx+(k-2)*self.nu+(1:2*self.nu) ] ;
-      %  H(imap,imap) = H(imap,imap) + [ eye(self.nu), eye(self.nu) ; eye(self.nu), eye(self.nu) ] ;
-      %end
+      idu = totx+(1:self.nu) ;
+      for k=2:self.N-1
+        idu1  = idu+self.nu ;
+        id    = [ idu, idu1 ] ;
+        H(id,id) = 1 ;
+        idu   = idu1 ;
+      end
       H = tril(H) ;
     end
 
@@ -334,6 +358,24 @@ classdef (Abstract) OCP_NLP < handle
     function H = jump_standard_hessian( ~, tL, tR, XL, XR, UC, L )
       dim = 2*self.nx+self.nu+self.np ;
       H   = zeros(dim,dim) ;
+    end
+
+    %  _______     __                  _             _
+    % |_   _\ \   / /   ___ ___  _ __ | |_ _ __ ___ | |___
+    %   | |  \ \ / /   / __/ _ \| '_ \| __| '__/ _ \| / __|
+    %   | |   \ V /   | (_| (_) | | | | |_| | | (_) | \__ \
+    %   |_|    \_/     \___\___/|_| |_|\__|_|  \___/|_|___/
+    % tvU
+    function tvU = TVU_standard( self, tL, tC, tR, UCL, UCR )
+      tvU = 0 ;
+    end
+
+    function tvG = TVU_standard_gradient( self, tL, tC, tR, UCL, UCR )
+      tvG = zeros(1,2*self.nu) ;
+    end
+
+    function tvH = TVU_standard_hessian( self, tL, tC, tR, UCL, UCR )
+      tvH = zeros(2*self.nu,2*self.nu) ;      
     end
 
     %        _    _           _     _

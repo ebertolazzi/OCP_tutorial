@@ -256,5 +256,24 @@ classdef OCP_BangBang < OCP_NLP
       Hess = zeros(5,5) ;
     end
 
+
+    %  _______     __                  _             _
+    % |_   _\ \   / /   ___ ___  _ __ | |_ _ __ ___ | |___
+    %   | |  \ \ / /   / __/ _ \| '_ \| __| '__/ _ \| / __|
+    %   | |   \ V /   | (_| (_) | | | | |_| | | (_) | \__ \
+    %   |_|    \_/     \___\___/|_| |_|\__|_|  \___/|_|___/
+    % tvU
+    function tvU = TVU( self, tL, tC, tR, UCL, UCR )
+      tvU = self.TVU_standard( tL, tC, tR, UCL, UCR );
+    end
+
+    function tvG = TVU_gradient( self, tL, tC, tR, UCL, UCR )
+      tvG = self.TVU_standard_gradient( tL, tC, tR, UCL, UCR );
+    end
+
+    function tvH = TVU_hessian( self, tL, tC, tR, UCL, UCR )
+      tvH = self.TVU_standard_hessian( tL, tC, tR, UCL, UCR );
+    end
+
   end
 end
