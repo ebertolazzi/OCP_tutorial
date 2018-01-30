@@ -59,7 +59,7 @@ classdef OCP_train < OCP_NLP
       self.zz      = [ 2, 4 ];
       self.uaMax   = 10 ;
       self.ubMax   = 2 ;    
-      self.epsia   = 1e-8 ;
+      self.epsia   = 1e-8;
       self.epsib   = 0 ;    
     end 
 
