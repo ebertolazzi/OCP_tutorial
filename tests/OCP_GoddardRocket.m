@@ -132,19 +132,19 @@ classdef OCP_GoddardRocket < OCP_NLP
       nodes = self.nodes ;
 
       subplot( 4, 1, 1 );  
-      plot( nodes, h ) ;
+      plot( nodes, h, 'Linewidth', 2 ) ;
       title('h') ;
 
       subplot( 4, 1, 2 );
-      plot( nodes, v ) ;
+      plot( nodes, v, 'Linewidth', 2 ) ;
       title('v') ;
 
       subplot( 4, 1, 3 );
-      plot( nodes, m ) ;
+      plot( nodes, m, 'Linewidth', 2 ) ;
       title('mass') ;
 
       subplot( 4, 1, 4 );  
-      plot( nodes(1:end-1), T ) ;
+      plot( nodes(1:end-1), T, 'Linewidth', 2 ) ;
       title('thrust') ;
     end
 

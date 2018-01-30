@@ -152,11 +152,11 @@ classdef OCP_Fermentor < OCP_NLP
       nodes = self.nodes ;
 
       subplot( 2, 1, 1 );  
-      plot( nodes, x1, nodes, x2, nodes, x3, nodes, x4 ) ;
+      plot( nodes, x1, nodes, x2, nodes, x3, nodes, x4, 'Linewidth', 2 ) ;
       title('x') ;
 
       subplot( 2, 1, 2 );  
-      plot( nodes(1:end-1), u ) ;
+      plot( nodes(1:end-1), u, 'Linewidth', 2 ) ;
       title('u') ;
 
     end

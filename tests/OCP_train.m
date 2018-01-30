@@ -131,15 +131,15 @@ classdef OCP_train < OCP_NLP
       nodes = self.nodes ;
 
       subplot( 3, 1, 1 );  
-      plot( nodes, x ) ;
+      plot( nodes, x, 'Linewidth', 2 ) ;
       title('x') ;
 
       subplot( 3, 1, 2 );  
-      plot( nodes, v ) ;
+      plot( nodes, v, 'Linewidth', 2 ) ;
       title('v') ;
 
       subplot( 3, 1, 3 );  
-      plot( nodes(1:end-1), ua, nodes(1:end-1), ub ) ;
+      plot( nodes(1:end-1), ua, nodes(1:end-1), ub, 'Linewidth', 2 ) ;
       title('ua,ub') ;
 
     end
