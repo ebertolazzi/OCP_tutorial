@@ -21,18 +21,27 @@ classdef (Abstract) OCP_NLP < handle
 
   properties (SetAccess = protected, Hidden = true)
     nodes
-    N      % total number of nodes
-    nx     % number of states
-    nu     % number of controls
-    np     % number of parameters
-    nbc    % number of boundary conditions
+    N    % total number of nodes
+    nx   % number of states
+    nu   % number of controls
+    np   % number of parameters
+    nbc  % number of boundary conditions
+    nseg % number of segments
+    npc  % number of path constraints
   end
 
   methods (Abstract)
     % Lagrange target
-    L     = lagrange( self, tL, tR, XL, XR, UC, PARS )
-    gradL = lagrange_gradient( self, tL, tR, XL, XR, UC, PARS )
-    hessL = lagrange_hessian( self, tL, tR, XL, XR, UC, PARS )
+    % nseg = number of the segment
+    % tL   = left node
+    % tR   = right node
+    % XL   = left state
+    % XR   = right state
+    % UC   = control like state 
+    % PARS = free parameters 
+    L     = lagrange( self, nseg, tL, tR, XL, XR, UC, PARS )
+    gradL = lagrange_gradient( self, nseg, tL, tR, XL, XR, UC, PARS )
+    hessL = lagrange_hessian( self, nseg, tL, tR, XL, XR, UC, PARS )
 
     % Mayer target
     M     = mayer( self, tL, tR, XL, XR, PARS )
@@ -40,14 +49,20 @@ classdef (Abstract) OCP_NLP < handle
     hessM = mayer_hessian( self, tL, tR, XL, XR, PARS )
 
     % Dynamical system part
-    C   = ds( self, tL, tR, XL, XR, UC, PARS )
-    CJ  = ds_jacobian( self, tL, tR, XL, XR, UC, PARS )
-    CH  = ds_hessian( self, tL, tR, XL, XR, UC, PARS, L )
+    C   = ds( self, nseg, tL, tR, XL, XR, UC, PARS )
+    CJ  = ds_jacobian( self, nseg, tL, tR, XL, XR, UC, PARS )
+    CH  = ds_hessian( self, nseg, tL, tR, XL, XR, UC, PARS, L )
+
+    % Path constraints
+    C  = pc( self, t, X, PARS )
+    CJ = pc_jacobian( self, t, X, PARS )
+    CH = pc_hessian( self, t, X, PARS, L )
 
     % Jump condition
-    jmp  = jump( self, tL, tR, XL, XR, UC, PARS )
-    jmpJ = jump_jacobian( self, tL, tR, XL, XR, UC, PARS )
-    jmpH = jump_hessian( self, tL, tR, XL, XR, UC, PARS, L )
+    % nsegL = number of the left segment, the right segment is nsegL+1
+    jmp  = jump( self, nsegL, t, XL, XR, PARS )
+    jmpJ = jump_jacobian( self, nsegL, t, XL, XR, PARS )
+    jmpH = jump_hessian( self, nsegL, t, XL, XR, PARS, L )
 
     % Boundary conditions
     bcf = bc( self, tL, tR, XL, XR, PARS )
@@ -61,12 +76,20 @@ classdef (Abstract) OCP_NLP < handle
   end
 
   methods
-
-    function self = OCP_NLP( nx, nu, np, nbc )
-      self.nx  = nx ;
-      self.nu  = nu ;
-      self.np  = np ;
-      self.nbc = nbc ;
+    %
+    % nx  = number of states
+    % nu  = number of controls
+    % np  = number of free parameters
+    % npc = number of path constraints
+    % nbc = number of boundary conditions
+    %
+    function self = OCP_NLP( nx, nu, np, npc, nbc )
+      self.nx   = nx ;
+      self.nu   = nu ;
+      self.np   = np ;
+      self.npc  = npc ;
+      self.nbc  = nbc ;
+      self.nseg = 1 ;
     end
 
     function setup( self, nodes )
@@ -91,11 +114,12 @@ classdef (Abstract) OCP_NLP < handle
 
       res = self.mayer( self.nodes(1), self.nodes(end), Z(idx), Z(idx1), Z(idp) ) ;
       idu = totx+(1:self.nu) ;
+      nsg = 1 ; % segment number
       for k=1:self.N-1
         nk   = self.nodes(k) ;
         nk1  = self.nodes(k+1) ;
         idx1 = idx + self.nx ; 
-        res  = res + self.lagrange( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
+        res  = res + self.lagrange( nsg, nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
         idu  = idu + self.nu ;
         idx  = idx1 ;
       end
@@ -124,12 +148,13 @@ classdef (Abstract) OCP_NLP < handle
       g = zeros( 1, totx + totu + self.np ) ;
       g([idx,idx1,idp]) = self.mayer_gradient( self.nodes(1), self.nodes(end), Z(idx), Z(idx1), Z(idp) ) ;
       idu = totx+(1:self.nu) ;
+      nsg = 1 ; % segment number
       for k=1:self.N-1
         nk    = self.nodes(k) ;
         nk1   = self.nodes(k+1) ;
         idx1  = idx + self.nx ;
         id    = [ idx, idx1, idu, idp ] ;
-        g(id) = g(id) + self.lagrange_gradient( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
+        g(id) = g(id) + self.lagrange_gradient( nsg, nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
         idx   = idx1 ;
         idu   = idu + self.nu ;
       end
@@ -169,14 +194,15 @@ classdef (Abstract) OCP_NLP < handle
       H(imap,imap) = sigma * self.mayer_hessian( n1, ne, Z(idx), Z(idx1), Z(idp) ) + ...
                      self.bc_hessian( n1, ne, Z(idx), Z(idx1), Z(idp), lambda(idl) ) ;
       idu = totx+(1:self.nu) ;
+      nsg = 1 ; % segment number
       for k=1:self.N-1
         nk   = self.nodes(k) ;
         nk1  = self.nodes(k+1) ;
         idx1 = idx + self.nx ;
         imap = [ idx, idx1, idu, idp ] ;
         H(imap,imap) = H(imap,imap) + ...
-                       sigma * self.lagrange_hessian( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) + ...
-                       self.ds_hessian( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp), lambda(idx) ) ;
+                       sigma * self.lagrange_hessian( nsg, nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) + ...
+                       self.ds_hessian( nsg, nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp), lambda(idx) ) ;
         idx = idx1 ;
         idu = idu + self.nu ;
       end
@@ -203,6 +229,7 @@ classdef (Abstract) OCP_NLP < handle
 
       idp = (totx+totu)+(1:self.np) ;
       dim = 2*self.nx+self.nu+self.np ;
+      nsg = 1 ; % segment number
       for k=1:self.N-1
         idx  = (k-1)*self.nx ;
         idu  = (k-1)*self.nu + totx ;
@@ -235,11 +262,12 @@ classdef (Abstract) OCP_NLP < handle
 
       C = zeros( (self.N-1)*self.nx + self.nbc, 1 ) ;
 
+      nsg = 1 ; % segment number
       for k=1:self.N-1
         nk     = self.nodes(k) ;
         nk1    = self.nodes(k+1) ;
         idx1   = idx + self.nx ;
-        C(idx) = self.ds( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
+        C(idx) = self.ds( nsg, nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
         idx    = idx1 ;
         idu    = idu + self.nu ;
       end
@@ -260,11 +288,12 @@ classdef (Abstract) OCP_NLP < handle
       dim  = (self.N-1)*self.nx+self.nbc ;
       Jac  = sparse( dim, totx+totu+self.np ) ;
 
+      nsg = 1 ; % segment number
       for k=1:self.N-1
         nk   = self.nodes(k) ;
         nk1  = self.nodes(k+1) ;
         idx1 = idx + self.nx ;
-        J    = self.ds_jacobian( nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
+        J    = self.ds_jacobian( nsg, nk, nk1, Z(idx), Z(idx1), Z(idu), Z(idp) ) ;
         Jac( idx, [ idx, idx1, idu, idp ] ) = J ;
         idu = idu + self.nu ;
         idx = idx1 ;
@@ -285,6 +314,7 @@ classdef (Abstract) OCP_NLP < handle
       Jac  = sparse( dimC, dimZ ) ;
       J    = ones(self.nx,2*self.nx+self.nu+self.np) ;
       idp  = totx + totu + (1:self.np) ;
+      nsg  = 1 ; % segment number
       for k=1:self.N-1
         idx  = (k-1)*self.nx ;
         idu  = (k-1)*self.nu + totx ;
@@ -302,7 +332,7 @@ classdef (Abstract) OCP_NLP < handle
     % | |_| |  _| | (_-<
     %  \___/ \__|_|_/__/
     %
-    function H = FD_ds_hessian( self, tL, tR, XL, XR, UC, PARS, L )
+    function H = FD_ds_hessian( self, nseg, tL, tR, XL, XR, UC, PARS, L )
       N = 2*self.nx+self.nu+self.np ;
 
       id1 = 1:self.nx ;
@@ -310,7 +340,7 @@ classdef (Abstract) OCP_NLP < handle
       id3 = 2*self.nx+(1:self.nu) ;
       id4 = 2*self.nx+self.nu+(1:self.np) ;
 
-      GRAD = @(W) self.ds_jacobian( tL, tR, XL+W(id1), XR+W(id2), UC+W(id3), PARS+W(id4)).' * L ;
+      GRAD = @(W) self.ds_jacobian( nseg, tL, tR, XL+W(id1), XR+W(id2), UC+W(id3), PARS+W(id4)).' * L ;
 
       % finite difference approximation of the hessian
       % Baseed on a code by Brendan C. Wood
@@ -343,19 +373,19 @@ classdef (Abstract) OCP_NLP < handle
     %  \__/ \_,_|_|_|_| .__/
     %                 |_|
     %
-    function ODE = jump_standard( ~, tL, tR, XL, XR, UC )
+    function ODE = jump_standard( ~, nsegL, t, XL, XR, UC )
       ODE = XR - XL ;
     end
 
     %
-    function JAC = jump_standard_jacobian( ~, tL, tR, XL, XR, UC )
+    function JAC = jump_standard_jacobian( ~, nsegL, t, XL, XR, UC )
       JAC = [ -eye(self.nx,self.nx), ...
                eye(self.nx,self.nx), ...
                zeros(self.nx, self.nu+self.np) ] ;
     end
 
     %
-    function H = jump_standard_hessian( ~, tL, tR, XL, XR, UC, L )
+    function H = jump_standard_hessian( ~, nsegL, t, XL, XR, UC, L )
       dim = 2*self.nx+self.nu+self.np ;
       H   = zeros(dim,dim) ;
     end
@@ -384,26 +414,26 @@ classdef (Abstract) OCP_NLP < handle
     % |_|_|_|_\__,_| .__/\___/_|_||_\__|
     %              |_|
     %     
-    function C = midpoint_ds( self, tL, tR, XL, XR, UC, PARS, RHS )
+    function C = midpoint_ds( self, nseg, tL, tR, XL, XR, UC, PARS, RHS )
       tM = (tR+tL)/2 ;
       XM = (XR+XL)./2 ;
-      C  = (XR-XL)/(tR-tL) - feval( RHS, tM, XM, UC, PARS ) ;
+      C  = (XR-XL)/(tR-tL) - feval( RHS, nseg, tM, XM, UC, PARS ) ;
     end
  
-    function CJ = midpoint_ds_jacobian( self, tL, tR, XL, XR, UC, PARS, JAC )
+    function CJ = midpoint_ds_jacobian( self, nseg, tL, tR, XL, XR, UC, PARS, JAC )
       tM = (tR+tL)/2 ;
       XM = (XR+XL)./2 ;
-      JJ = feval( JAC, tM, XM, UC, PARS ) ;
+      JJ = feval( JAC, nseg, tM, XM, UC, PARS ) ;
       B1 = (-0.5)*JJ(1:self.nx,1:self.nx) ;
       B2 = JJ(1:self.nx,self.nx+1:end) ;
       bf = 1/(tR - tL) ;
       CJ = [ B1-bf*eye(self.nx), B1+bf*eye(self.nx), -B2 ] ;
     end
 
-    function CH = midpoint_ds_hessian( self, tL, tR, XL, XR, UC, PARS, L, HESS )
+    function CH = midpoint_ds_hessian( self, nseg, tL, tR, XL, XR, UC, PARS, L, HESS )
       tM = (tR+tL)/2 ;
       XM = (XR+XL)./2 ;
-      HH = feval( HESS, tM, XM, UC, PARS, L ) ;
+      HH = feval( HESS, nseg, tM, XM, UC, PARS, L ) ;
       D1 = (-0.25)*HH(1:self.nx,1:self.nx) ;
       R1 = (-0.5)*HH(1:self.nx,self.nx+1:end) ;
       D2 = -HH(self.nx+1:end,self.nx+1:end) ;

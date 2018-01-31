@@ -33,16 +33,16 @@ classdef OCP_BangBang < OCP_NLP
     % | (_) | |) | _|
     %  \___/|___/|___|
     %
-    function RES = RHS( self, t, X, U, T )
+    function RES = RHS( self, nseg, t, X, U, T )
       RES = [ T*X(2) ; T*U ] ;
     end
     %
-    function RES = JAC( self, t, X, U, T )
+    function RES = JAC( self, nseg, t, X, U, T )
       RES = [ 0, T, 0, X(2) ; ...
               0, 0, T, U  ] ;
     end
     %
-    function RES = HESS( self, t, X, U, T, L )
+    function RES = HESS( self, nseg, t, X, U, T, L )
       RES = [ 0, 0,    0,    0    ; ...
               0, 0,    0,    L(1) ; ...
               0, 0,    0,    L(2) ; ...
@@ -53,7 +53,12 @@ classdef OCP_BangBang < OCP_NLP
   methods
 
     function self = OCP_BangBang( )
-      self@OCP_NLP( 2, 1, 1, 4 ) ;
+      nx  = 2 ; % number of states
+      nu  = 1 ; % number of controls
+      np  = 1 ; % number of free parameters
+      npc = 0 ; % number of path constraints
+      nbc = 4 ; % number of boundary conditions
+      self@OCP_NLP( nx, nu, np, npc, nbc ) ;
     end
     
     function setup( self, nodes )
@@ -94,7 +99,7 @@ classdef OCP_BangBang < OCP_NLP
       funcs.jacobian          = @(Z) self.NLP_constraints_jacobian(Z);
       funcs.jacobianstructure = @() self.NLP_constraints_jacobian_pattern();
 
-      if true
+      if false
         %options.ipopt.derivative_test = 'second-order';
         funcs.hessian           = @( Z, sigma, lambda ) self.NLP_hessian( Z, sigma, lambda ) ;
         funcs.hessianstructure  = @() self.NLP_hessian_pattern();
@@ -133,8 +138,10 @@ classdef OCP_BangBang < OCP_NLP
       plot( nodes, v, 'Linewidth', 2 );
       title('v') ;
 
-      subplot( 3, 1, 3 );  
-      plot( nodes(1:end-1), u, 'Linewidth', 2 );
+      subplot( 3, 1, 3 );
+      uu = reshape( [1;1] * u.', 1, 2*(N-1) ) ; 
+      nn = reshape( [ nodes(1:end-1) ; nodes(2:end)], 1, 2*(N-1) ) ;
+      plot( nn, uu, 'Linewidth', 2 ) ;
       title('u') ;
 
     end
@@ -151,18 +158,18 @@ classdef OCP_BangBang < OCP_NLP
     % |____\__,_\__, |_| \__,_|_||_\__, \___|
     %           |___/              |___/
     %
-    function L = lagrange( ~, tL, tR, XL, XR, UC, P )
+    function L = lagrange( ~, ~, tL, tR, XL, XR, UC, P )
       L = 0 ;
     end
 
     %
-    function gradL = lagrange_gradient( self, tL, tR, XL, XR, UC, P )
+    function gradL = lagrange_gradient( self, ~, tL, tR, XL, XR, UC, P )
       dim   = 2*self.nx + self.nu + self.np ;
       gradL = zeros( 1, dim ) ;
     end
 
     %
-    function hessL = lagrange_hessian( self, tL, tR, XL, XR, UC, P )
+    function hessL = lagrange_hessian( self, ~, tL, tR, XL, XR, UC, P )
       dim   = 2*self.nx + self.nu + self.np ;
       hessL = zeros(dim,dim) ;
     end
@@ -195,18 +202,39 @@ classdef OCP_BangBang < OCP_NLP
     % | (_) | |) | _| / /| |) / _ \| _|
     %  \___/|___/|___/_/ |___/_/ \_\___|
     %
-    function C = ds( self, tL, tR, XL, XR, UC, T )
-      C = self.midpoint_ds( tL, tR, XL, XR, UC, T, @self.RHS ) ;
+    function C = ds( self, nseg, tL, tR, XL, XR, UC, T )
+      C = self.midpoint_ds( nseg, tL, tR, XL, XR, UC, T, @self.RHS ) ;
     end
 
     %
-    function CJ = ds_jacobian( self, tL, tR, XL, XR, UC, T )
-      CJ = self.midpoint_ds_jacobian( tL, tR, XL, XR, UC, T, @self.JAC ) ;
+    function CJ = ds_jacobian( self, nseg, tL, tR, XL, XR, UC, T )
+      CJ = self.midpoint_ds_jacobian( nseg, tL, tR, XL, XR, UC, T, @self.JAC ) ;
     end
 
     %
-    function H = ds_hessian( self, tL, tR, XL, XR, UC, T, L )
-      H = self.midpoint_ds_hessian( tL, tR, XL, XR, UC, T, L, @self.HESS ) ;
+    function H = ds_hessian( self, nseg, tL, tR, XL, XR, UC, T, L )
+      H = self.midpoint_ds_hessian( nseg, tL, tR, XL, XR, UC, T, L, @self.HESS ) ;
+    end
+
+    %              _   _                           _             _           _   
+    %  _ __   __ _| |_| |__     ___ ___  _ __  ___| |_ _ __ __ _(_)_ __  ___| |_ 
+    % | '_ \ / _` | __| '_ \   / __/ _ \| '_ \/ __| __| '__/ _` | | '_ \/ __| __|
+    % | |_) | (_| | |_| | | | | (_| (_) | | | \__ \ |_| | | (_| | | | | \__ \ |_ 
+    % | .__/ \__,_|\__|_| |_|  \___\___/|_| |_|___/\__|_|  \__,_|_|_| |_|___/\__|
+    % |_|                                                                        
+    % 
+
+    % Path constraints
+    function C = pc( self, t, X, PARS )
+      C = zeros(0,1) ;
+    end
+
+    function CJ = pc_jacobian( self, t, X, PARS )
+      CJ = zeros(0,self.nx) ;
+    end
+
+    function CH = pc_hessian( self, t, X, PARS, L )
+      CH = zeros(self.nx,self.nx) ;
     end
 
     %     _
@@ -215,18 +243,18 @@ classdef OCP_BangBang < OCP_NLP
     %  \__/ \_,_|_|_|_| .__/
     %                 |_|
     %
-    function ODE = jump( self, tL, tR, XL, XR, UC )
-      ODE = self.jump_standard(tL, tR, XL, XR, UC );
+    function ODE = jump( self, nsegL, t, XL, XR )
+      ODE = self.jump_standard(tL, tR, XL, XR );
     end
 
     %
-    function JAC = jump_jacobian( ~, tL, tR, XL, XR, UC )
-      JAC = self.jump_jacobian_standard( tL, tR, XL, XR, UC );
+    function JAC = jump_jacobian( ~, nsegL, t, XL, XR )
+      JAC = self.jump_jacobian_standard( tL, tR, XL, XR );
     end
 
     %
-    function H = jump_hessian( ~, tL, tR, XL, XR, UC, L )
-      H = self.jump_hessian_standard( tL, tR, XL, XR, UC, L );
+    function H = jump_hessian( ~, nsegL, t, XL, XR, L )
+      H = self.jump_hessian_standard( tL, tR, XL, XR, L );
     end
 
     %  ___  ___

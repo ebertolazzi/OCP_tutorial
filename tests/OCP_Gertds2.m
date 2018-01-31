@@ -31,7 +31,12 @@ classdef OCP_Gertds2 < OCP_NLP
   methods
 
     function self = OCP_Gertds2( )
-      self@OCP_NLP( 3, 1, 0, 5 ) ;
+      nx  = 3 ; % number of states
+      nu  = 1 ; % number of controls
+      np  = 0 ; % number of free parameters
+      npc = 0 ; % number of path constraints
+      nbc = 5 ; % number of boundary conditions
+      self@OCP_NLP( nx, nu, np, npc, nbc ) ;
     end
     
     function setup( self, nodes )
@@ -86,7 +91,7 @@ classdef OCP_Gertds2 < OCP_NLP
       end
 
       % Run IPOPT.
-      x0 = zeros(1,3*N+N-1) ;
+      x0 = zeros(3*N+N-1,1) ;
 
       tic
       [self.sol, info] = ipopt(x0,funcs,options);
@@ -106,8 +111,10 @@ classdef OCP_Gertds2 < OCP_NLP
       plot( nodes, x1, nodes, x2, nodes, x3, 'Linewidth', 2 ) ;
       title('x') ;
 
-      subplot( 2, 1, 2 );  
-      plot( nodes(1:end-1), u, 'Linewidth', 2 ) ;
+      subplot( 2, 1, 2 );
+      uu = reshape( [1;1] * u.', 1, 2*(N-1) ) ; 
+      nn = reshape( [ nodes(1:end-1) ; nodes(2:end)], 1, 2*(N-1) ) ;
+      plot( nn, uu, 'Linewidth', 2 ) ;
       title('u') ;
 
     end
@@ -124,17 +131,17 @@ classdef OCP_Gertds2 < OCP_NLP
     % |____\__,_\__, |_| \__,_|_||_\__, \___|
     %           |___/              |___/
     %
-    function L = lagrange( ~, tL, tR, XL, XR, UC, ~ )
+    function L = lagrange( ~, ~, tL, tR, XL, XR, UC, ~ )
       L = 0 ;
     end
 
     %
-    function gradL = lagrange_gradient( self, tL, tR, XL, XR, UC, ~ )
+    function gradL = lagrange_gradient( self, ~, tL, tR, XL, XR, UC, ~ )
       gradL = zeros(1,2*self.nx+self.nu) ;
     end
     
     %
-    function hessL = lagrange_hessian( self, tL, tR, XL, XR, UC, ~ )
+    function hessL = lagrange_hessian( self, ~, tL, tR, XL, XR, UC, ~ )
       dim = 2*self.nx+self.nu ;
       hessL = zeros( dim, dim ) ;
     end
@@ -164,7 +171,7 @@ classdef OCP_Gertds2 < OCP_NLP
     % | (_) | |) | _| / /| |) / _ \| _|
     %  \___/|___/|___/_/ |___/_/ \_\___|
     %
-    function C = ds( self, tL, tR, XL, XR, UC, ~ )
+    function C = ds( self, ~, tL, tR, XL, XR, UC, ~ )
       % ----------
       DT  = tR-tL ;
       % ----------
@@ -175,7 +182,7 @@ classdef OCP_Gertds2 < OCP_NLP
     end
 
     %
-    function JAC = ds_jacobian( self, tL, tR, XL, XR, UC, ~ )
+    function JAC = ds_jacobian( self, ~, tL, tR, XL, XR, UC, ~ )
       % ----------
       DT  = tR-tL ;
       % ----------
@@ -185,13 +192,34 @@ classdef OCP_Gertds2 < OCP_NLP
     end
 
     %
-    function H = ds_hessian( self, tL, tR, XL, XR, UC, P, L )
+    function H = ds_hessian( self, nseg, tL, tR, XL, XR, UC, P, L )
       if false
-        H = self.FD_ds_hessian( tL, tR, XL, XR, UC, P, L ) ;
+        H = self.FD_ds_hessian( nseg, tL, tR, XL, XR, UC, P, L ) ;
       else
         H      = zeros(7,7) ;
         H(7,7) = -L(3) ;
       end
+    end
+
+    %              _   _                           _             _           _   
+    %  _ __   __ _| |_| |__     ___ ___  _ __  ___| |_ _ __ __ _(_)_ __  ___| |_ 
+    % | '_ \ / _` | __| '_ \   / __/ _ \| '_ \/ __| __| '__/ _` | | '_ \/ __| __|
+    % | |_) | (_| | |_| | | | | (_| (_) | | | \__ \ |_| | | (_| | | | | \__ \ |_ 
+    % | .__/ \__,_|\__|_| |_|  \___\___/|_| |_|___/\__|_|  \__,_|_|_| |_|___/\__|
+    % |_|                                                                        
+    % 
+
+    % Path constraints
+    function C = pc( self, t, X, PARS )
+      C = zeros(0,1) ;
+    end
+
+    function CJ = pc_jacobian( self, t, X, PARS )
+      CJ = zeros(0,self.nx) ;
+    end
+
+    function CH = pc_hessian( self, t, X, PARS, L )
+      CH = zeros(self.nx,self.nx) ;
     end
 
     %     _
@@ -200,17 +228,17 @@ classdef OCP_Gertds2 < OCP_NLP
     %  \__/ \_,_|_|_|_| .__/
     %                 |_|
     %
-    function ODE = jump( ~, tL, tR, XL, XR, UC, ~ )
+    function ODE = jump( ~, tL, tR, XL, XR, ~ )
       ODE = XR - XL ;
     end
 
     %
-    function JAC = jump_jacobian( ~, tL, tR, XL, XR, UC, ~ )
+    function JAC = jump_jacobian( ~, tL, tR, XL, XR, ~ )
       JAC = [ -eye(2,2), eye(2,2) ] ;
     end
 
     %
-    function H = jump_hessian( ~, tL, tR, XL, XR, UC, ~, L )
+    function H = jump_hessian( ~, tL, tR, XL, XR, ~, L )
       H  = zeros(4,4) ;
     end
 

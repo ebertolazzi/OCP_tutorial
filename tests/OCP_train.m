@@ -41,7 +41,12 @@ classdef OCP_train < OCP_NLP
   methods
 
     function self = OCP_train( )
-      self@OCP_NLP( 2, 2, 0, 4 ) ;
+      nx  = 2 ; % number of states
+      nu  = 2 ; % number of controls
+      np  = 0 ; % number of free parameters
+      npc = 0 ; % number of path constraints
+      nbc = 4 ; % number of boundary conditions
+      self@OCP_NLP( nx, nu, np, npc, nbc ) ;
     end
     
     function setup( self, nodes )
@@ -138,8 +143,11 @@ classdef OCP_train < OCP_NLP
       plot( nodes, v, 'Linewidth', 2 ) ;
       title('v') ;
 
-      subplot( 3, 1, 3 );  
-      plot( nodes(1:end-1), ua, nodes(1:end-1), ub, 'Linewidth', 2 ) ;
+      subplot( 3, 1, 3 );
+      uua = reshape( [1;1] * ua.', 1, 2*(N-1) ) ; 
+      uub = reshape( [1;1] * ub.', 1, 2*(N-1) ) ;
+      nnn = reshape( [ nodes(1:end-1) ; nodes(2:end)], 1, 2*(N-1) ) ;
+      plot( nnn, uua, nnn, uub, 'Linewidth', 2 ) ;
       title('ua,ub') ;
 
     end
@@ -183,7 +191,7 @@ classdef OCP_train < OCP_NLP
     % |____\__,_\__, |_| \__,_|_||_\__, \___|
     %           |___/              |___/
     %
-    function L = lagrange( ~, tL, tR, XL, XR, UC, ~ )
+    function L = lagrange( ~, ~, tL, tR, XL, XR, UC, ~ )
       ua = UC(1) ; ub = UC(2) ;
       xL = XL(1) ; vL = XL(2) ;
       xR = XR(1) ; vR = XR(2) ;
@@ -192,7 +200,7 @@ classdef OCP_train < OCP_NLP
     end
 
     %
-    function gradL = lagrange_gradient( ~, tL, tR, XL, XR, UC, ~ )
+    function gradL = lagrange_gradient( ~, ~, tL, tR, XL, XR, UC, ~ )
       ua = UC(1) ; ub = UC(2) ;
       xL = XL(1) ; vL = XL(2) ;
       xR = XR(1) ; vR = XR(2) ;
@@ -201,7 +209,7 @@ classdef OCP_train < OCP_NLP
     end
     
     %
-    function hessL = lagrange_hessian( ~, tL, tR, XL, XR, UC, ~ )
+    function hessL = lagrange_hessian( ~, ~, tL, tR, XL, XR, UC, ~ )
       ua = UC(1) ; ub = UC(2) ;
       xL = XL(1) ; vL = XL(2) ;
       xR = XR(1) ; vR = XR(2) ;
@@ -239,7 +247,7 @@ classdef OCP_train < OCP_NLP
     % | (_) | |) | _| / /| |) / _ \| _|
     %  \___/|___/|___/_/ |___/_/ \_\___|
     %
-    function C = ds( self, tL, tR, XL, XR, UC, ~ )
+    function C = ds( self, ~, tL, tR, XL, XR, UC, ~ )
       xL = XL(1) ; vL = XL(2) ;
       xR = XR(1) ; vR = XR(2) ;
       ua = UC(1) ; ub = UC(2) ;
@@ -255,7 +263,7 @@ classdef OCP_train < OCP_NLP
     end
 
     %
-    function JAC = ds_jacobian( self, tL, tR, XL, XR, UC, ~ )
+    function JAC = ds_jacobian( self, ~, tL, tR, XL, XR, UC, ~ )
       xL = XL(1) ; vL = XL(2) ;
       xR = XR(1) ; vR = XR(2) ;
       ua = UC(1) ; ub = UC(2) ;
@@ -271,9 +279,9 @@ classdef OCP_train < OCP_NLP
     end
 
     %
-    function H = ds_hessian( self, tL, tR, XL, XR, UC, P, L )
+    function H = ds_hessian( self, nseg, tL, tR, XL, XR, UC, P, L )
       if false
-        H = self.FD_ds_hessian( tL, tR, XL, XR, UC, P, L ) ;
+        H = self.FD_ds_hessian( nseg, tL, tR, XL, XR, UC, P, L ) ;
       else
         xL = XL(1) ; vL = XL(2) ;
         xR = XR(1) ; vR = XR(2) ;
@@ -300,18 +308,39 @@ classdef OCP_train < OCP_NLP
     %  \__/ \_,_|_|_|_| .__/
     %                 |_|
     %
-    function ODE = jump( ~, tL, tR, XL, XR, UC, ~ )
+    function ODE = jump( ~, nseg, t, XL, XR, ~ )
       ODE = XR - XL ;
     end
 
     %
-    function JAC = jump_jacobian( ~, tL, tR, XL, XR, UC, ~ )
+    function JAC = jump_jacobian( ~, nseg, t, XL, XR, ~ )
       JAC = [ -eye(2,2), eye(2,2) ] ;
     end
 
     %
-    function H = jump_hessian( ~, tL, tR, XL, XR, UC, ~, L )
+    function H = jump_hessian( ~, nseg, t, XL, XR, ~, L )
       H  = zeros(4,4) ;
+    end
+
+    %              _   _                           _             _           _   
+    %  _ __   __ _| |_| |__     ___ ___  _ __  ___| |_ _ __ __ _(_)_ __  ___| |_ 
+    % | '_ \ / _` | __| '_ \   / __/ _ \| '_ \/ __| __| '__/ _` | | '_ \/ __| __|
+    % | |_) | (_| | |_| | | | | (_| (_) | | | \__ \ |_| | | (_| | | | | \__ \ |_ 
+    % | .__/ \__,_|\__|_| |_|  \___\___/|_| |_|___/\__|_|  \__,_|_|_| |_|___/\__|
+    % |_|                                                                        
+    % 
+
+    % Path constraints
+    function C = pc( self, t, X, PARS )
+      C = zeros(0,1) ;
+    end
+
+    function CJ = pc_jacobian( self, t, X, PARS )
+      CJ = zeros(0,self.nx) ;
+    end
+
+    function CH = pc_hessian( self, t, X, PARS, L )
+      CH = zeros(self.nx,self.nx) ;
     end
 
     %  ___  ___

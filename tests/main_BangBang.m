@@ -19,7 +19,7 @@
 
 addpath('../lib') ;
 
-N     = 1000 ;
+N     = 99 ;
 nodes = (0:N)/N ;
 
 bb = OCP_BangBang() ;
@@ -27,21 +27,5 @@ bb = OCP_BangBang() ;
 bb.setup( nodes ) ;
 
 info = bb.solve() ;
-
 bb.plot() ;
-
-% x  = sol(1:2:2*N) ;
-% v  = sol(2:2:2*N) ;
-% ua = sol(2*N+(1:2:2*N-2)) ;
-% ub = sol(2*N+(2:2:2*N-2)) ;
-% 
-% subplot( 3, 1, 1 );  
-% plot( nodes, x ) ;
-% 
-% subplot( 3, 1, 2 );  
-% plot( nodes, v ) ;
-% 
-% subplot( 3, 1, 3 );  
-% plot( nodes(1:end-1), ua, nodes(1:end-1), ub ) ;
-% 
 info 

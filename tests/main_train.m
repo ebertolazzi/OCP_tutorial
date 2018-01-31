@@ -19,7 +19,7 @@
 
 addpath('../lib') ;
 
-N     = 400;
+N     = 200;
 nodes = 4.8*(0:N)/N ;
 
 train = OCP_train() ;

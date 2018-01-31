@@ -54,7 +54,12 @@ classdef OCP_Fermentor < OCP_NLP
   methods
 
     function self = OCP_Fermentor( )
-      self@OCP_NLP( 4, 1, 0, 4 ) ;
+      nx  = 4 ; % number of states
+      nu  = 1 ; % number of controls
+      np  = 0 ; % number of free parameters
+      npc = 0 ; % number of path constraints
+      nbc = 4 ; % number of boundary conditions
+      self@OCP_NLP( nx, nu, np, npc, nbc ) ;
     end
     
     function setup( self, nodes )
@@ -155,10 +160,11 @@ classdef OCP_Fermentor < OCP_NLP
       plot( nodes, x1, nodes, x2, nodes, x3, nodes, x4, 'Linewidth', 2 ) ;
       title('x') ;
 
-      subplot( 2, 1, 2 );  
-      plot( nodes(1:end-1), u, 'Linewidth', 2 ) ;
+      subplot( 2, 1, 2 );
+      uu = reshape( [1;1] * u.', 1, 2*(N-1) ) ; 
+      nn = reshape( [ nodes(1:end-1) ; nodes(2:end)], 1, 2*(N-1) ) ;
+      plot( nn, uu, 'Linewidth', 2 ) ;
       title('u') ;
-
     end
 
     %                      __              _   _
@@ -208,17 +214,17 @@ classdef OCP_Fermentor < OCP_NLP
     % |____\__,_\__, |_| \__,_|_||_\__, \___|
     %           |___/              |___/
     %
-    function L = lagrange( ~, tL, tR, XL, XR, UC, ~ )
+    function L = lagrange( ~, ~, tL, tR, XL, XR, UC, ~ )
       L = 0.00001*UC(1)^2 ;
     end
 
     %
-    function gradL = lagrange_gradient( self, tL, tR, XL, XR, UC, ~ )
+    function gradL = lagrange_gradient( self, ~, tL, tR, XL, XR, UC, ~ )
       gradL = [0,0,0,0,0,0,0,0,0.00002*UC(1)] ;
     end
     
     %
-    function hessL = lagrange_hessian( self, tL, tR, XL, XR, UC, ~ )
+    function hessL = lagrange_hessian( self, ~, tL, tR, XL, XR, UC, ~ )
       dim = 2*self.nx+self.nu ;
       hessL = zeros( dim, dim ) ;
       hessL(9,9) = 0.00002 ;
@@ -251,7 +257,7 @@ classdef OCP_Fermentor < OCP_NLP
     % | (_) | |) | _| / /| |) / _ \| _|
     %  \___/|___/|___/_/ |___/_/ \_\___|
     %
-    function RES = ODE( self, t, X, U, P )
+    function RES = ODE( self, ~, t, X, U, P )
       RES = [ self.h1(X(1),X(3))*X(1) - U*(X(1)/(500*X(4))) ; ...
               self.h2(X(3))*X(1) - 0.01*X(2)- U*(X(2)/(500*X(4))) ; ...
               - self.h1(X(1),X(3))*X(1)/0.47 - self.h2(X(3))*X(1)/1.2 ...
@@ -259,7 +265,7 @@ classdef OCP_Fermentor < OCP_NLP
               U/500 ] ;      
     end
  
-    function JAC = JODE( self, t, X, U, P )
+    function JAC = JODE( self, ~, t, X, U, P )
       JAC = zeros(4,5) ;
       JAC(1,1) = self.h1_1(X(1),X(3))*X(1) + self.h1(X(1),X(3)) - U/(500*X(4)) ;
       JAC(1,3) = self.h1_3(X(1), X(3))*X(1) ;
@@ -280,18 +286,39 @@ classdef OCP_Fermentor < OCP_NLP
       JAC(4,5) = 1/500 ;
     end
 
-    function C = ds( self, tL, tR, XL, XR, UC, P )
-      C = self.midpoint_ds( tL, tR, XL, XR, UC, P, @self.ODE );
+    function C = ds( self, nseg, tL, tR, XL, XR, UC, P )
+      C = self.midpoint_ds( nseg, tL, tR, XL, XR, UC, P, @self.ODE );
     end
 
     %
-    function JAC = ds_jacobian( self, tL, tR, XL, XR, UC, P )
-      JAC = self.midpoint_ds_jacobian( tL, tR, XL, XR, UC, P, @self.JODE );
+    function JAC = ds_jacobian( self, nseg, tL, tR, XL, XR, UC, P )
+      JAC = self.midpoint_ds_jacobian( nseg, tL, tR, XL, XR, UC, P, @self.JODE );
     end
 
     %
-    function H = ds_hessian( self, tL, tR, XL, XR, UC, P, L )
-      H = self.FD_ds_hessian( tL, tR, XL, XR, UC, P, L ) ;
+    function H = ds_hessian( self, nseg, tL, tR, XL, XR, UC, P, L )
+      H = self.FD_ds_hessian( nseg, tL, tR, XL, XR, UC, P, L ) ;
+    end
+
+    %              _   _                           _             _           _   
+    %  _ __   __ _| |_| |__     ___ ___  _ __  ___| |_ _ __ __ _(_)_ __  ___| |_ 
+    % | '_ \ / _` | __| '_ \   / __/ _ \| '_ \/ __| __| '__/ _` | | '_ \/ __| __|
+    % | |_) | (_| | |_| | | | | (_| (_) | | | \__ \ |_| | | (_| | | | | \__ \ |_ 
+    % | .__/ \__,_|\__|_| |_|  \___\___/|_| |_|___/\__|_|  \__,_|_|_| |_|___/\__|
+    % |_|                                                                        
+    % 
+
+    % Path constraints
+    function C = pc( self, t, X, PARS )
+      C = zeros(0,1) ;
+    end
+
+    function CJ = pc_jacobian( self, t, X, PARS )
+      CJ = zeros(0,self.nx) ;
+    end
+
+    function CH = pc_hessian( self, t, X, PARS, L )
+      CH = zeros(self.nx,self.nx) ;
     end
 
     %     _
@@ -300,17 +327,17 @@ classdef OCP_Fermentor < OCP_NLP
     %  \__/ \_,_|_|_|_| .__/
     %                 |_|
     %
-    function ODE = jump( ~, tL, tR, XL, XR, UC, ~ )
+    function ODE = jump( ~, tL, tR, XL, XR, ~ )
       ODE = XR - XL ;
     end
 
     %
-    function JAC = jump_jacobian( ~, tL, tR, XL, XR, UC, ~ )
+    function JAC = jump_jacobian( ~, tL, tR, XL, XR, ~ )
       JAC = [ -eye(2,2), eye(2,2) ] ;
     end
 
     %
-    function H = jump_hessian( ~, tL, tR, XL, XR, UC, ~, L )
+    function H = jump_hessian( ~, tL, tR, XL, XR, ~, L )
       H  = zeros(4,4) ;
     end
 

@@ -41,7 +41,12 @@ classdef OCP_GoddardRocket < OCP_NLP
   methods
 
     function self = OCP_GoddardRocket( )
-      self@OCP_NLP( 3, 1, 1, 4 ) ;
+      nx  = 3 ; % number of states
+      nu  = 1 ; % number of controls
+      np  = 1 ; % number of free parameters
+      npc = 0 ; % number of path constraints
+      nbc = 4 ; % number of boundary conditions
+      self@OCP_NLP( nx, nu, np, npc, nbc ) ;
     end
 
     function setup( self, nodes )
@@ -143,8 +148,10 @@ classdef OCP_GoddardRocket < OCP_NLP
       plot( nodes, m, 'Linewidth', 2 ) ;
       title('mass') ;
 
-      subplot( 4, 1, 4 );  
-      plot( nodes(1:end-1), T, 'Linewidth', 2 ) ;
+      subplot( 4, 1, 4 );
+      TT = reshape( [1;1] * T.', 1, 2*(N-1) ) ; 
+      nn = reshape( [ nodes(1:end-1) ; nodes(2:end)], 1, 2*(N-1) ) ;
+      plot( nn, TT, 'Linewidth', 2 ) ;
       title('thrust') ;
     end
 
@@ -209,17 +216,17 @@ classdef OCP_GoddardRocket < OCP_NLP
     % |____\__,_\__, |_| \__,_|_||_\__, \___|
     %           |___/              |___/
     %
-    function L = lagrange( ~, tL, tR, XL, XR, UC, TS )
+    function L = lagrange( ~, ~, tL, tR, XL, XR, UC, TS )
       L = 0 ;
     end
 
     %
-    function gradL = lagrange_gradient( self, tL, tR, XL, XR, UC, TS )
+    function gradL = lagrange_gradient( self, ~, tL, tR, XL, XR, UC, TS )
       gradL = zeros( 1, 2*self.nx + self.nu + self.np ) ;
     end
 
     %
-    function hessL = lagrange_hessian( self, tL, tR, XL, XR, UC, TS )
+    function hessL = lagrange_hessian( self, ~, tL, tR, XL, XR, UC, TS )
       dim = 2*self.nx + self.nu + self.np ;
       hessL = zeros(dim,dim) ;
     end
@@ -254,7 +261,7 @@ classdef OCP_GoddardRocket < OCP_NLP
     % | (_) | |) | _| / /| |) / _ \| _|
     %  \___/|___/|___/_/ |___/_/ \_\___|
     %
-    function C = ds( self, tL, tR, XL, XR, UC, TS )
+    function C = ds( self, ~, tL, tR, XL, XR, UC, TS )
       hL = XL(1) ; vL = XL(2) ; mL = XL(3) ;
       hR = XR(1) ; vR = XR(2) ; mR = XR(3) ;
       T  = UC(1) ;
@@ -272,7 +279,7 @@ classdef OCP_GoddardRocket < OCP_NLP
     end
 
     %
-    function JAC = ds_jacobian( self, tL, tR, XL, XR, UC, TS )
+    function JAC = ds_jacobian( self, ~, tL, tR, XL, XR, UC, TS )
       hL = XL(1) ; vL = XL(2) ; mL = XL(3) ;
       hR = XR(1) ; vR = XR(2) ; mR = XR(3) ;
       T  = UC(1) ;
@@ -320,8 +327,29 @@ classdef OCP_GoddardRocket < OCP_NLP
     end
 
     %
-    function H = ds_hessian( self, tL, tR, XL, XR, UC, P, L )
-      H = self.FD_ds_hessian( tL, tR, XL, XR, UC, P, L ) ;
+    function H = ds_hessian( self, nseg, tL, tR, XL, XR, UC, P, L )
+      H = self.FD_ds_hessian( nseg, tL, tR, XL, XR, UC, P, L ) ;
+    end
+
+    %              _   _                           _             _           _   
+    %  _ __   __ _| |_| |__     ___ ___  _ __  ___| |_ _ __ __ _(_)_ __  ___| |_ 
+    % | '_ \ / _` | __| '_ \   / __/ _ \| '_ \/ __| __| '__/ _` | | '_ \/ __| __|
+    % | |_) | (_| | |_| | | | | (_| (_) | | | \__ \ |_| | | (_| | | | | \__ \ |_ 
+    % | .__/ \__,_|\__|_| |_|  \___\___/|_| |_|___/\__|_|  \__,_|_|_| |_|___/\__|
+    % |_|                                                                        
+    % 
+
+    % Path constraints
+    function C = pc( self, t, X, PARS )
+      C = zeros(0,1) ;
+    end
+
+    function CJ = pc_jacobian( self, t, X, PARS )
+      CJ = zeros(0,self.nx) ;
+    end
+
+    function CH = pc_hessian( self, t, X, PARS, L )
+      CH = zeros(self.nx,self.nx) ;
     end
 
     %     _
@@ -330,17 +358,17 @@ classdef OCP_GoddardRocket < OCP_NLP
     %  \__/ \_,_|_|_|_| .__/
     %                 |_|
     %
-    function ODE = jump( ~, tL, tR, XL, XR, UC, P )
+    function ODE = jump( ~, ~, t, XL, XR, P )
       ODE = XR - XL ;
     end
 
     %
-    function JAC = jump_jacobian( ~, tL, tR, XL, XR, UC, P )
+    function JAC = jump_jacobian( ~, ~, t, XL, XR, P )
       JAC = [ -eye(3,3), eye(3,3) ] ;
     end
 
     %
-    function H = jump_hessian( ~, tL, tR, XL, XR, UC, P, L )
+    function H = jump_hessian( ~, ~, t, XL, XR, P, L )
       H = zeros(6,6) ;
     end
 
